@@ -1,0 +1,20 @@
+[Unit]
+Description=EbiBot Discord Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ebi
+WorkingDirectory=/home/ebi/discord-bot
+EnvironmentFile=/home/ebi/discord-bot/.env
+ExecStart=/home/ebi/discord-bot/venv/bin/python -m src.main
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+ProtectSystem=strict
+ReadWritePaths=/home/ebi/discord-bot
+
+[Install]
+WantedBy=multi-user.target
