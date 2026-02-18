@@ -12,6 +12,7 @@ from .cogs.reminder import ReminderCog
 from .cogs.watchdog import WatchdogCog
 from .cogs.claude_chat import ClaudeChatCog
 from .cogs.docs_sync import DocsSyncCog
+from .cogs.auto_upgrade import AutoUpgradeCog
 from claude_discord.claude.runner import ClaudeRunner
 from claude_discord.cogs.skill_command import SkillCommandCog
 from .database.models import Database
@@ -135,6 +136,14 @@ def main() -> None:
                     )
                     await bot.add_cog(docs_sync_cog)
                     logger.info("Docs Sync Cog追加完了")
+
+                    # Auto Upgrade Cog — webhook trigger → package upgrade + restart
+                    auto_upgrade_cog = AutoUpgradeCog(
+                        bot=bot,
+                        channel_id=claude_channel_id,
+                    )
+                    await bot.add_cog(auto_upgrade_cog)
+                    logger.info("Auto Upgrade Cog追加完了")
             else:
                 logger.warning("CLAUDE_CHANNEL_ID 未設定 — Claude Chat Cog無効")
 
