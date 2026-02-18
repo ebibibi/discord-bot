@@ -43,11 +43,13 @@ class ClaudeChatCog(commands.Cog):
         runner: ClaudeRunner,
         claude_channel_id: int,
         max_concurrent: int = 3,
+        allowed_user_ids: set[int] | None = None,
     ) -> None:
         self.bot = bot
         self.repo = repo
         self.runner = runner
         self.claude_channel_id = claude_channel_id
+        self._allowed_user_ids = allowed_user_ids
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._active_runners: dict[int, ClaudeRunner] = {}
 
@@ -56,6 +58,11 @@ class ClaudeChatCog(commands.Cog):
         """Handle incoming messages."""
         if message.author.bot:
             return
+
+        # Authorization: only allowed users can invoke Claude CLI
+        if self._allowed_user_ids is not None:
+            if message.author.id not in self._allowed_user_ids:
+                return
 
         # New conversation in the Claude channel
         if message.channel.id == self.claude_channel_id:
@@ -130,6 +137,7 @@ class ClaudeChatCog(commands.Cog):
                 permission_mode=self.runner.permission_mode,
                 working_dir=self.runner.working_dir,
                 timeout_seconds=self.runner.timeout_seconds,
+                allowed_tools=self.runner.allowed_tools,
             )
             self._active_runners[thread.id] = runner
 

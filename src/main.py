@@ -12,6 +12,7 @@ from .cogs.reminder import ReminderCog
 from .cogs.watchdog import WatchdogCog
 from .cogs.claude_chat import ClaudeChatCog
 from claude_discord.claude.runner import ClaudeRunner
+from claude_discord.cogs.skill_command import SkillCommandCog
 from .database.models import Database
 from .database.repository import NotificationRepository
 from .utils.logger import get_logger
@@ -65,8 +66,23 @@ def main() -> None:
     # Bot作成
     bot = EbiBot(default_channel_id=channel_id)
 
+    # Claude Runner（API テスト用にも使う）
+    claude_runner = None
+    if claude_channel_id:
+        allowed_tools_str = os.getenv("CLAUDE_ALLOWED_TOOLS", "")
+        allowed_tools = [t.strip() for t in allowed_tools_str.split(",") if t.strip()] or None
+        claude_runner = ClaudeRunner(
+            command=os.getenv("CLAUDE_COMMAND", "claude"),
+            model=os.getenv("CLAUDE_MODEL", "sonnet"),
+            permission_mode=os.getenv("CLAUDE_PERMISSION_MODE", "acceptEdits"),
+            working_dir=os.getenv("CLAUDE_WORKING_DIR", "") or None,
+            timeout_seconds=int(os.getenv("SESSION_TIMEOUT_SECONDS", "300")),
+            allowed_tools=allowed_tools,
+            dangerously_skip_permissions=os.getenv("CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS", "").lower() in ("1", "true", "yes"),
+        )
+
     # API サーバー
-    api_server = APIServer(repo=repo, bot=bot, host=api_host, port=api_port)
+    api_server = APIServer(repo=repo, bot=bot, host=api_host, port=api_port, claude_runner=claude_runner)
 
     async def start_all() -> None:
         async with bot:
@@ -75,28 +91,40 @@ def main() -> None:
             await bot.add_cog(WatchdogCog(bot))
 
             # Claude Chat Cog追加
-            if claude_channel_id:
+            if claude_channel_id and claude_runner:
                 session_db_path = "data/sessions.db"
                 await _init_claude_session_db(session_db_path)
 
                 from .database.claude_session_repository import ClaudeSessionRepository
                 session_repo = ClaudeSessionRepository(session_db_path)
-                runner = ClaudeRunner(
-                    command=os.getenv("CLAUDE_COMMAND", "claude"),
-                    model=os.getenv("CLAUDE_MODEL", "sonnet"),
-                    permission_mode=os.getenv("CLAUDE_PERMISSION_MODE", "acceptEdits"),
-                    working_dir=os.getenv("CLAUDE_WORKING_DIR", "") or None,
-                    timeout_seconds=int(os.getenv("SESSION_TIMEOUT_SECONDS", "300")),
-                )
-                claude_cog = ClaudeChatCog(
-                    bot=bot,
-                    repo=session_repo,
-                    runner=runner,
-                    claude_channel_id=claude_channel_id,
-                    max_concurrent=int(os.getenv("MAX_CONCURRENT_SESSIONS", "3")),
-                )
-                await bot.add_cog(claude_cog)
-                logger.info(f"Claude Chat Cog追加完了 (channel: {claude_channel_id})")
+                # Owner authorization — DISCORD_OWNER_ID is required for security.
+                # Without it, the Cog refuses to start (fail-closed).
+                owner_id_str = os.getenv("DISCORD_OWNER_ID", "")
+                if not owner_id_str.isdigit():
+                    logger.error("DISCORD_OWNER_ID 未設定 — Claude Chat Cogを無効化（セキュリティ上必須）")
+                else:
+                    allowed_user_ids = {int(owner_id_str)}
+                    claude_cog = ClaudeChatCog(
+                        bot=bot,
+                        repo=session_repo,
+                        runner=claude_runner,
+                        claude_channel_id=claude_channel_id,
+                        max_concurrent=int(os.getenv("MAX_CONCURRENT_SESSIONS", "3")),
+                        allowed_user_ids=allowed_user_ids,
+                    )
+                    await bot.add_cog(claude_cog)
+                    logger.info(f"Claude Chat Cog追加完了 (channel: {claude_channel_id}, owner: {owner_id_str})")
+
+                    # Skill Command Cog — /skill <name> with autocomplete
+                    skill_cog = SkillCommandCog(
+                        bot=bot,
+                        repo=session_repo,
+                        runner=claude_runner,
+                        claude_channel_id=claude_channel_id,
+                        allowed_user_ids=allowed_user_ids,
+                    )
+                    await bot.add_cog(skill_cog)
+                    logger.info(f"Skill Command Cog追加完了 ({len(skill_cog._skills)}個のスキルをロード)")
             else:
                 logger.warning("CLAUDE_CHANNEL_ID 未設定 — Claude Chat Cog無効")
 

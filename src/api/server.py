@@ -6,6 +6,8 @@ from typing import Optional
 
 from aiohttp import web
 
+from claude_discord.claude.runner import ClaudeRunner
+from claude_discord.claude.types import MessageType
 from ..database.repository import NotificationRepository
 from ..utils.embeds import build_claude_embed
 from ..utils.logger import get_logger
@@ -22,11 +24,13 @@ class APIServer:
         bot,
         host: str = "127.0.0.1",
         port: int = 8099,
+        claude_runner: Optional[ClaudeRunner] = None,
     ):
         self.repo = repo
         self.bot = bot
         self.host = host
         self.port = port
+        self.claude_runner = claude_runner
         self.app = web.Application()
         self._setup_routes()
         self._runner: Optional[web.AppRunner] = None
@@ -37,6 +41,7 @@ class APIServer:
         self.app.router.add_post("/api/schedule", self.schedule)
         self.app.router.add_get("/api/scheduled", self.list_scheduled)
         self.app.router.add_delete("/api/scheduled/{id}", self.cancel_scheduled)
+        self.app.router.add_post("/api/test-claude", self.test_claude)
 
     async def start(self) -> None:
         """APIサーバーを起動する。"""
@@ -138,3 +143,60 @@ class APIServer:
             {"error": "Not found or already processed"},
             status=404,
         )
+
+    async def test_claude(self, request: web.Request) -> web.Response:
+        """Claude Code CLI integration test endpoint.
+
+        POST /api/test-claude {"prompt": "Say hello"}
+        Returns collected stream events as JSON.
+        """
+        if not self.claude_runner:
+            return web.json_response({"error": "Claude runner not configured"}, status=500)
+
+        try:
+            data = await request.json()
+        except json.JSONDecodeError:
+            return web.json_response({"error": "Invalid JSON"}, status=400)
+
+        prompt = data.get("prompt", "Say 'test OK' in one word.")
+        events = []
+        session_id = None
+        final_text = ""
+        error = None
+
+        try:
+            runner = ClaudeRunner(
+                command=self.claude_runner.command,
+                model=self.claude_runner.model,
+                permission_mode=self.claude_runner.permission_mode,
+                working_dir=self.claude_runner.working_dir,
+                timeout_seconds=min(int(data.get("timeout", 60)), 120),
+            )
+            async for event in runner.run(prompt):
+                event_info = {
+                    "type": event.message_type.value,
+                    "is_complete": event.is_complete,
+                }
+                if event.session_id:
+                    session_id = event.session_id
+                    event_info["session_id"] = event.session_id
+                if event.text:
+                    final_text = event.text
+                    event_info["text"] = event.text[:200]
+                if event.error:
+                    error = event.error
+                    event_info["error"] = event.error
+                if event.tool_use:
+                    event_info["tool"] = event.tool_use.tool_name
+                events.append(event_info)
+        except Exception as e:
+            return web.json_response({"error": str(e), "events": events}, status=500)
+
+        return web.json_response({
+            "status": "error" if error else "ok",
+            "session_id": session_id,
+            "response": final_text[:500] if final_text else None,
+            "error": error,
+            "event_count": len(events),
+            "events": events,
+        })
