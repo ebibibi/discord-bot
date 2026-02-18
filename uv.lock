@@ -241,9 +241,9 @@ wheels = [
 ]
 
 [[package]]
-name = "claude-discord"
+name = "claude-code-discord-bridge"
 version = "0.1.0"
-source = { git = "https://github.com/ebibibi/claude-discord.git#5ad44e67f06595a0588ec3d84c6722d875c7611f" }
+source = { git = "https://github.com/ebibibi/claude-code-discord-bridge.git#14df3cd35fa8ebcdd067c1feeb47c96eb7095abf" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "discord-py" },
@@ -397,7 +397,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiosqlite" },
-    { name = "claude-discord" },
+    { name = "claude-code-discord-bridge" },
     { name = "discord-py" },
     { name = "python-dotenv" },
 ]
@@ -413,7 +413,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.9,<4.0" },
     { name = "aiosqlite", specifier = ">=0.20,<1.0" },
-    { name = "claude-discord", git = "https://github.com/ebibibi/claude-discord.git" },
+    { name = "claude-code-discord-bridge", git = "https://github.com/ebibibi/claude-code-discord-bridge.git" },
     { name = "discord-py", specifier = ">=2.6,<3.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },

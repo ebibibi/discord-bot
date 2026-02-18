@@ -7,7 +7,7 @@ Handles the core message flow:
 4. Status reactions and tool embeds are posted in real-time
 5. Final response is posted to the thread
 
-Origin: claude-discord framework (github.com/ebibibi/claude-discord)
+Origin: claude-code-discord-bridge framework (github.com/ebibibi/claude-code-discord-bridge)
 """
 
 from __future__ import annotations

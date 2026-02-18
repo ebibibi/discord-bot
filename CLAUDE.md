@@ -2,11 +2,11 @@
 
 胡田さん専用の Discord Bot。Push通知・監視・Claude Code チャットを1プロセスで提供する。
 
-## claude-discord との関係（重要）
+## claude-code-discord-bridge との関係（重要）
 
 ```
-claude-discord (OSS framework)     EbiBot (personal instance)
-github.com/ebibibi/claude-discord  /home/ebi/discord-bot/
+claude-code-discord-bridge (OSS framework)     EbiBot (personal instance)
+github.com/ebibibi/claude-code-discord-bridge  /home/ebi/discord-bot/
   PyPIパッケージとして             pyproject.toml の dependencies に
   インストール                     git+https://... で宣言
            |                                |
@@ -14,10 +14,10 @@ github.com/ebibibi/claude-discord  /home/ebi/discord-bot/
            +------>  import claude_discord  |
 ```
 
-- **claude-discord** = 汎用フレームワーク（公開リポ）。`claude_discord` パッケージとしてインストール
-- **EbiBot** = 個人インスタンス（プライベートリポ）。claude-discordをパッケージ依存 + 独自Cog（reminder, watchdog）
-- **アップデート**: `uv lock --upgrade-package claude-discord && uv sync`
-- **機能追加の判断基準**: 汎用的 → claude-discordに。個人ワークフロー固有 → EbiBotに
+- **claude-code-discord-bridge** = 汎用フレームワーク（公開リポ）。`claude_discord` パッケージとしてインストール
+- **EbiBot** = 個人インスタンス（プライベートリポ）。claude-code-discord-bridgeをパッケージ依存 + 独自Cog（reminder, watchdog）
+- **アップデート**: `uv lock --upgrade-package claude-code-discord-bridge && uv sync`
+- **機能追加の判断基準**: 汎用的 → claude-code-discord-bridgeに。個人ワークフロー固有 → EbiBotに
 - **1つのBotトークン、1つのプロセス**で全Cogが動く。別プロセスで同じトークンを使わない
 
 ## アーキテクチャ
@@ -33,7 +33,7 @@ github.com/ebibibi/claude-discord  /home/ebi/discord-bot/
 |-----|--------|------|
 | `reminder.py` | EbiBot独自 | /remind スラッシュコマンド + 時刻指定送信 |
 | `watchdog.py` | EbiBot独自 | Todoist期限切れ30分監視 |
-| `claude_chat.py` | EbiBot独自（claude-discordのクラスをimport） | Discord → Claude Code CLI チャット |
+| `claude_chat.py` | EbiBot独自（claude-code-discord-bridgeのクラスをimport） | Discord → Claude Code CLI チャット |
 
 ## ディレクトリ構成
 
@@ -46,7 +46,7 @@ src/
   database/        # SQLite DB & Repository（通知 + Claude session）
   utils/           # Embed, Logger
 tests/             # pytest
-pyproject.toml     # uv依存管理（claude-discord = git+GitHub）
+pyproject.toml     # uv依存管理（claude-code-discord-bridge = git+GitHub）
 uv.lock            # ロックファイル
 ```
 
@@ -56,7 +56,7 @@ uv.lock            # ロックファイル
 - テスト: `uv run pytest tests/ -v --cov=src`
 - 設定は `.env` から読み込み（python-dotenv）
 - REST APIは `127.0.0.1:8099` のみバインド（外部非公開）
-- **claude-discord由来のコードを変更したい場合**: まずclaude-discordリポで変更・push → EbiBotで `uv lock --upgrade-package claude-discord && uv sync`
+- **claude-code-discord-bridge由来のコードを変更したい場合**: まずclaude-code-discord-bridgeリポで変更・push → EbiBotで `uv lock --upgrade-package claude-code-discord-bridge && uv sync`
 
 ## REST API
 

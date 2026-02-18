@@ -12,7 +12,7 @@ dependencies = [
     "aiohttp>=3.9,<4.0",
     "python-dotenv>=1.0,<2.0",
     "aiosqlite>=0.20,<1.0",
-    "claude-discord @ git+https://github.com/ebibibi/claude-discord.git",
+    "claude-code-discord-bridge @ git+https://github.com/ebibibi/claude-code-discord-bridge.git",
 ]
 
 [project.optional-dependencies]

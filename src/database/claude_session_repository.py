@@ -1,6 +1,6 @@
 """Claude Code session repository (aiosqlite).
 
-Wraps the session repository from claude-discord framework.
+Wraps the session repository from claude-code-discord-bridge framework.
 This module uses the same schema initialized in main.py.
 """
 

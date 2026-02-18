@@ -11,6 +11,7 @@ from .api.server import APIServer
 from .cogs.reminder import ReminderCog
 from .cogs.watchdog import WatchdogCog
 from .cogs.claude_chat import ClaudeChatCog
+from .cogs.docs_sync import DocsSyncCog
 from claude_discord.claude.runner import ClaudeRunner
 from claude_discord.cogs.skill_command import SkillCommandCog
 from .database.models import Database
@@ -125,6 +126,15 @@ def main() -> None:
                     )
                     await bot.add_cog(skill_cog)
                     logger.info(f"Skill Command Cog追加完了 ({len(skill_cog._skills)}個のスキルをロード)")
+
+                    # Docs Sync Cog — webhook trigger → Claude Code docs sync
+                    docs_sync_cog = DocsSyncCog(
+                        bot=bot,
+                        runner=claude_runner,
+                        channel_id=claude_channel_id,
+                    )
+                    await bot.add_cog(docs_sync_cog)
+                    logger.info("Docs Sync Cog追加完了")
             else:
                 logger.warning("CLAUDE_CHANNEL_ID 未設定 — Claude Chat Cog無効")
 
