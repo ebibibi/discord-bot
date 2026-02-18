@@ -1,31 +1,15 @@
-"""Docs Sync Cog — GitHub → Discord webhook trigger → Claude Code でドキュメント更新。
+"""Docs Sync — bridge の WebhookTriggerCog を使った GitHub → Claude Code ドキュメント更新。
 
 2つのモード:
 - "🔄 docs-sync" (通常push): 英語ドキュメントの同期のみ（軽量・高速）
 - "🔄 docs-sync-translate" (リリース時): 全言語翻訳（ja, zh-CN, ko, es, pt-BR, fr）
 
-セキュリティ設計:
-- Discord webhook メッセージ（webhook_id あり）のみ受け付ける
-- 固定プレフィックス "🔄 docs-sync" のみ反応（それ以外は無視）
-- プロンプトはサーバー側にハードコード（webhook経由で注入不可）
-- webhook URLが漏洩しても、同期が無駄に走るだけ（任意コマンド実行不可）
+このファイルはプロンプト定義のみ。実行ロジックは claude_discord.cogs.webhook_trigger に委譲。
 """
 
 from __future__ import annotations
 
-import asyncio
-import logging
-
-import discord
-from discord.ext import commands
-
-from claude_discord.claude.runner import ClaudeRunner
-from claude_discord.cogs._run_helper import run_claude_in_thread
-
-logger = logging.getLogger(__name__)
-
-TRIGGER_SYNC = "🔄 docs-sync"
-TRIGGER_TRANSLATE = "🔄 docs-sync-translate"
+from claude_discord.cogs.webhook_trigger import WebhookTrigger
 
 _COMMON_HEADER = """\
 You are a documentation maintainer for the claude-code-discord-bridge project.
@@ -165,93 +149,18 @@ If nothing changed, just report that docs are already up to date.
 DOCS_SYNC_PROMPT = _COMMON_HEADER + _TRANSLATE_JA_STEP + _PR_STEP_SYNC
 DOCS_TRANSLATE_PROMPT = _COMMON_HEADER + _TRANSLATE_STEP + _PR_STEP_TRANSLATE
 
+# Trigger definitions for WebhookTriggerCog
+BRIDGE_DIR = "/home/ebi/claude-code-discord-bridge"
 
-class DocsSyncCog(commands.Cog):
-    """Cog that handles automated documentation sync triggered by Discord webhooks."""
-
-    def __init__(
-        self,
-        bot: commands.Bot,
-        runner: ClaudeRunner,
-        channel_id: int,
-    ) -> None:
-        self.bot = bot
-        self.runner = runner
-        self.channel_id = channel_id
-        self._lock = asyncio.Lock()
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message) -> None:
-        """Handle webhook trigger messages."""
-        # Only respond to webhook messages (not regular users, not bots)
-        if not message.webhook_id:
-            return
-
-        # Only in the configured channel
-        if message.channel.id != self.channel_id:
-            return
-
-        # Determine mode from trigger message
-        content = message.content.strip()
-        if content == TRIGGER_TRANSLATE:
-            prompt = DOCS_TRANSLATE_PROMPT
-            mode = "translate"
-        elif content.startswith(TRIGGER_SYNC):
-            prompt = DOCS_SYNC_PROMPT
-            mode = "sync"
-        else:
-            return
-
-        logger.info(f"docs-sync トリガー受信 (mode={mode}): {content}")
-
-        # Prevent concurrent runs
-        if self._lock.locked():
-            await message.reply("⏳ docs-sync は既に実行中です。スキップします。")
-            return
-
-        async with self._lock:
-            await self._run_docs_sync(message, prompt, mode)
-
-    async def _run_docs_sync(
-        self,
-        trigger_message: discord.Message,
-        prompt: str,
-        mode: str,
-    ) -> None:
-        """Run the docs sync process via Claude Code using the shared run helper."""
-        label = "📄 docs-sync" if mode == "sync" else "🌐 docs-translate"
-        thread = await trigger_message.create_thread(name=label)
-
-        if mode == "sync":
-            await thread.send("🔄 ドキュメント同期を開始します（英語 + 日本語）...")
-        else:
-            await thread.send("🌐 全言語翻訳を開始します（数分かかります）...")
-
-        timeout = 300 if mode == "sync" else 900  # 5min for sync, 15min for translate
-
-        runner = ClaudeRunner(
-            command=self.runner.command,
-            model=self.runner.model,
-            permission_mode="default",
-            working_dir="/home/ebi/claude-code-discord-bridge",
-            timeout_seconds=timeout,
-            dangerously_skip_permissions=True,  # Automated workflow — prompt is hardcoded server-side
-        )
-
-        # Use shared run helper — same rich experience as interactive sessions
-        # (streaming text, tool embeds with results, thinking, intermediate text)
-        # repo=None because automated workflows don't need session persistence
-        session_id = await run_claude_in_thread(
-            thread=thread,
-            runner=runner,
-            repo=None,
-            prompt=prompt,
-            session_id=None,
-            status=None,
-        )
-
-        # Add reaction to the trigger message based on result
-        if session_id:
-            await trigger_message.add_reaction("✅")
-        else:
-            await trigger_message.add_reaction("❌")
+DOCS_SYNC_TRIGGERS = {
+    "🔄 docs-sync-translate": WebhookTrigger(
+        prompt=DOCS_TRANSLATE_PROMPT,
+        working_dir=BRIDGE_DIR,
+        timeout=900,
+    ),
+    "🔄 docs-sync": WebhookTrigger(
+        prompt=DOCS_SYNC_PROMPT,
+        working_dir=BRIDGE_DIR,
+        timeout=300,
+    ),
+}

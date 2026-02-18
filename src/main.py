@@ -1,22 +1,28 @@
 """エントリーポイント — Bot + REST API + Claude Chat 同一asyncioループ"""
 
+from __future__ import annotations
+
 import asyncio
 import os
 import signal
 
 from dotenv import load_dotenv
 
+from claude_discord.claude.runner import ClaudeRunner
+from claude_discord.cogs.auto_upgrade import AutoUpgradeCog
+from claude_discord.cogs.skill_command import SkillCommandCog
+from claude_discord.cogs.webhook_trigger import WebhookTriggerCog
+from claude_discord.database.notification_repo import NotificationRepository
+from claude_discord.ext.api_server import ApiServer
+
 from .bot import EbiBot
-from .api.server import APIServer
+from .cogs.auto_upgrade import EBIBOT_UPGRADE_CONFIG
+from .cogs.claude_chat import ClaudeChatCog
+from .cogs.docs_sync import DOCS_SYNC_TRIGGERS
 from .cogs.reminder import ReminderCog
 from .cogs.watchdog import WatchdogCog
-from .cogs.claude_chat import ClaudeChatCog
-from .cogs.docs_sync import DocsSyncCog
-from .cogs.auto_upgrade import AutoUpgradeCog
-from claude_discord.claude.runner import ClaudeRunner
-from claude_discord.cogs.skill_command import SkillCommandCog
 from .database.models import Database
-from .database.repository import NotificationRepository
+from .database.repository import NotificationRepository as EbiBotNotificationRepo
 from .utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -60,15 +66,15 @@ def main() -> None:
     api_host = os.getenv("API_HOST", "127.0.0.1")
     api_port = int(os.getenv("API_PORT", "8099"))
 
-    # DB初期化（通知用）
+    # DB初期化（通知用 — EbiBot独自のsyncリポ）
     db = Database(db_path="data/bot.db")
     db.initialize()
-    repo = NotificationRepository(db)
+    ebibot_repo = EbiBotNotificationRepo(db)
 
     # Bot作成
     bot = EbiBot(default_channel_id=channel_id)
 
-    # Claude Runner（API テスト用にも使う）
+    # Claude Runner
     claude_runner = None
     if claude_channel_id:
         allowed_tools_str = os.getenv("CLAUDE_ALLOWED_TOOLS", "")
@@ -80,30 +86,45 @@ def main() -> None:
             working_dir=os.getenv("CLAUDE_WORKING_DIR", "") or None,
             timeout_seconds=int(os.getenv("SESSION_TIMEOUT_SECONDS", "300")),
             allowed_tools=allowed_tools,
-            dangerously_skip_permissions=os.getenv("CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS", "").lower() in ("1", "true", "yes"),
+            dangerously_skip_permissions=os.getenv(
+                "CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS", "",
+            ).lower() in ("1", "true", "yes"),
         )
 
-    # API サーバー
-    api_server = APIServer(repo=repo, bot=bot, host=api_host, port=api_port, claude_runner=claude_runner)
+    # bridge の NotificationRepository（REST API用）
+    notification_repo = NotificationRepository("data/notifications.db")
+
+    # bridge の ApiServer（REST API）
+    api_server = ApiServer(
+        repo=notification_repo,
+        bot=bot,
+        default_channel_id=channel_id,
+        host=api_host,
+        port=api_port,
+    )
 
     async def start_all() -> None:
+        # 通知DBスキーマ初期化
+        await notification_repo.init_db()
+
         async with bot:
-            # Cog追加
-            await bot.add_cog(ReminderCog(bot, repo))
+            # EbiBot独自 Cog
+            await bot.add_cog(ReminderCog(bot, ebibot_repo))
             await bot.add_cog(WatchdogCog(bot))
 
-            # Claude Chat Cog追加
+            # Claude Chat Cog + 関連
             if claude_channel_id and claude_runner:
                 session_db_path = "data/sessions.db"
                 await _init_claude_session_db(session_db_path)
 
                 from .database.claude_session_repository import ClaudeSessionRepository
                 session_repo = ClaudeSessionRepository(session_db_path)
-                # Owner authorization — DISCORD_OWNER_ID is required for security.
-                # Without it, the Cog refuses to start (fail-closed).
+
                 owner_id_str = os.getenv("DISCORD_OWNER_ID", "")
                 if not owner_id_str.isdigit():
-                    logger.error("DISCORD_OWNER_ID 未設定 — Claude Chat Cogを無効化（セキュリティ上必須）")
+                    logger.error(
+                        "DISCORD_OWNER_ID 未設定 — Claude Chat Cogを無効化"
+                    )
                 else:
                     allowed_user_ids = {int(owner_id_str)}
                     claude_cog = ClaudeChatCog(
@@ -111,13 +132,18 @@ def main() -> None:
                         repo=session_repo,
                         runner=claude_runner,
                         claude_channel_id=claude_channel_id,
-                        max_concurrent=int(os.getenv("MAX_CONCURRENT_SESSIONS", "3")),
+                        max_concurrent=int(
+                            os.getenv("MAX_CONCURRENT_SESSIONS", "3"),
+                        ),
                         allowed_user_ids=allowed_user_ids,
                     )
                     await bot.add_cog(claude_cog)
-                    logger.info(f"Claude Chat Cog追加完了 (channel: {claude_channel_id}, owner: {owner_id_str})")
+                    logger.info(
+                        "Claude Chat Cog追加完了 (channel: %d)",
+                        claude_channel_id,
+                    )
 
-                    # Skill Command Cog — /skill <name> with autocomplete
+                    # Skill Command Cog
                     skill_cog = SkillCommandCog(
                         bot=bot,
                         repo=session_repo,
@@ -126,24 +152,25 @@ def main() -> None:
                         allowed_user_ids=allowed_user_ids,
                     )
                     await bot.add_cog(skill_cog)
-                    logger.info(f"Skill Command Cog追加完了 ({len(skill_cog._skills)}個のスキルをロード)")
+                    logger.info("Skill Command Cog追加完了")
 
-                    # Docs Sync Cog — webhook trigger → Claude Code docs sync
-                    docs_sync_cog = DocsSyncCog(
+                    # Docs Sync — bridge の WebhookTriggerCog
+                    docs_sync_cog = WebhookTriggerCog(
                         bot=bot,
                         runner=claude_runner,
-                        channel_id=claude_channel_id,
+                        triggers=DOCS_SYNC_TRIGGERS,
+                        channel_ids={claude_channel_id},
                     )
                     await bot.add_cog(docs_sync_cog)
-                    logger.info("Docs Sync Cog追加完了")
+                    logger.info("Docs Sync Cog追加完了 (WebhookTriggerCog)")
 
-                    # Auto Upgrade Cog — webhook trigger → package upgrade + restart
+                    # Auto Upgrade — bridge の AutoUpgradeCog
                     auto_upgrade_cog = AutoUpgradeCog(
                         bot=bot,
-                        channel_id=claude_channel_id,
+                        config=EBIBOT_UPGRADE_CONFIG,
                     )
                     await bot.add_cog(auto_upgrade_cog)
-                    logger.info("Auto Upgrade Cog追加完了")
+                    logger.info("Auto Upgrade Cog追加完了 (AutoUpgradeCog)")
             else:
                 logger.warning("CLAUDE_CHANNEL_ID 未設定 — Claude Chat Cog無効")
 
@@ -163,7 +190,6 @@ def main() -> None:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    # シグナルハンドラ
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.ensure_future(shutdown()))
 

@@ -18,6 +18,8 @@ github.com/ebibibi/claude-code-discord-bridge  /home/ebi/discord-bot/
 - **EbiBot** = 個人インスタンス（プライベートリポ）。claude-code-discord-bridgeをパッケージ依存 + 独自Cog（reminder, watchdog）
 - **アップデート**: `uv lock --upgrade-package claude-code-discord-bridge && uv sync`
 - **機能追加の判断基準**: 汎用的 → claude-code-discord-bridgeに。個人ワークフロー固有 → EbiBotに
+- **新機能を追加するとき、bridge側に汎化できないか常に考えること**。bridge側に同等機能があるならそちらを使う
+- **bridge由来の汎用Cog**: `WebhookTriggerCog`（Webhook→Claude実行）、`AutoUpgradeCog`（自動更新）、`ApiServer`（REST API）
 - **1つのBotトークン、1つのプロセス**で全Cogが動く。別プロセスで同じトークンを使わない
 
 ## アーキテクチャ
@@ -33,7 +35,10 @@ github.com/ebibibi/claude-code-discord-bridge  /home/ebi/discord-bot/
 |-----|--------|------|
 | `reminder.py` | EbiBot独自 | /remind スラッシュコマンド + 時刻指定送信 |
 | `watchdog.py` | EbiBot独自 | Todoist期限切れ30分監視 |
-| `claude_chat.py` | EbiBot独自（claude-code-discord-bridgeのクラスをimport） | Discord → Claude Code CLI チャット |
+| `claude_chat.py` | EbiBot独自（bridgeのクラスをimport） | Discord → Claude Code CLI チャット |
+| `docs_sync.py` | **プロンプト定義のみ**（bridge WebhookTriggerCog使用） | GitHub → ドキュメント同期 |
+| `auto_upgrade.py` | **設定定義のみ**（bridge AutoUpgradeCog使用） | パッケージ自動更新 + 再起動 |
+| `api/server.py` | **bridge ApiServer を re-export** | REST API（通知・スケジュール） |
 
 ## ディレクトリ構成
 
