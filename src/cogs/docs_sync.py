@@ -20,8 +20,7 @@ import discord
 from discord.ext import commands
 
 from claude_discord.claude.runner import ClaudeRunner
-from claude_discord.discord_ui.chunker import chunk_message
-from claude_discord.discord_ui.embeds import error_embed
+from claude_discord.cogs._run_helper import run_claude_in_thread
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +218,7 @@ class DocsSyncCog(commands.Cog):
         prompt: str,
         mode: str,
     ) -> None:
-        """Run the docs sync process via Claude Code."""
+        """Run the docs sync process via Claude Code using the shared run helper."""
         label = "📄 docs-sync" if mode == "sync" else "🌐 docs-translate"
         thread = await trigger_message.create_thread(name=label)
 
@@ -233,41 +232,26 @@ class DocsSyncCog(commands.Cog):
         runner = ClaudeRunner(
             command=self.runner.command,
             model=self.runner.model,
-            permission_mode="default",  # Full permissions for git operations
+            permission_mode="default",
             working_dir="/home/ebi/claude-code-discord-bridge",
             timeout_seconds=timeout,
+            dangerously_skip_permissions=True,  # Automated workflow — prompt is hardcoded server-side
         )
 
-        accumulated_text = ""
-        tool_count = 0
+        # Use shared run helper — same rich experience as interactive sessions
+        # (streaming text, tool embeds with results, thinking, intermediate text)
+        # repo=None because automated workflows don't need session persistence
+        session_id = await run_claude_in_thread(
+            thread=thread,
+            runner=runner,
+            repo=None,
+            prompt=prompt,
+            session_id=None,
+            status=None,
+        )
 
-        try:
-            from claude_discord.claude.types import MessageType
-
-            async for event in runner.run(prompt, session_id=None):
-                if event.message_type == MessageType.ASSISTANT:
-                    if event.text:
-                        accumulated_text = event.text
-
-                # Report tool usage as progress updates
-                if event.tool_use:
-                    tool_count += 1
-                    desc = event.tool_use.display_name
-                    if tool_count <= 50:  # Don't spam too much
-                        await thread.send(f"⚙️ {desc}")
-
-                if event.is_complete:
-                    if event.error:
-                        await thread.send(embed=error_embed(event.error))
-                        await trigger_message.add_reaction("❌")
-                    else:
-                        response_text = event.text or accumulated_text
-                        if response_text:
-                            for chunk in chunk_message(response_text):
-                                await thread.send(chunk)
-                        await trigger_message.add_reaction("✅")
-
-        except Exception:
-            logger.exception("docs-sync エラー")
-            await thread.send(embed=error_embed("docs-sync でエラーが発生しました。"))
+        # Add reaction to the trigger message based on result
+        if session_id:
+            await trigger_message.add_reaction("✅")
+        else:
             await trigger_message.add_reaction("❌")

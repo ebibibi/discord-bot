@@ -20,14 +20,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from claude_discord.claude.runner import ClaudeRunner
-from claude_discord.claude.types import MessageType
-from claude_discord.discord_ui.chunker import chunk_message
-from claude_discord.discord_ui.embeds import (
-    error_embed,
-    session_complete_embed,
-    session_start_embed,
-    tool_use_embed,
-)
+from claude_discord.cogs._run_helper import run_claude_in_thread
 from claude_discord.discord_ui.status import StatusManager
 
 logger = logging.getLogger(__name__)
@@ -131,60 +124,18 @@ class ClaudeChatCog(commands.Cog):
             status = StatusManager(user_message)
             await status.set_thinking()
 
-            runner = ClaudeRunner(
-                command=self.runner.command,
-                model=self.runner.model,
-                permission_mode=self.runner.permission_mode,
-                working_dir=self.runner.working_dir,
-                timeout_seconds=self.runner.timeout_seconds,
-                allowed_tools=self.runner.allowed_tools,
-            )
+            runner = self.runner.clone()
             self._active_runners[thread.id] = runner
 
-            accumulated_text = ""
-            final_session_id = session_id
-            tool_messages: dict[str, discord.Message] = {}
-
             try:
-                async for event in runner.run(prompt, session_id=session_id):
-                    if event.message_type == MessageType.SYSTEM and event.session_id:
-                        final_session_id = event.session_id
-                        await self.repo.save(thread.id, final_session_id)
-                        if not session_id:
-                            await thread.send(embed=session_start_embed(final_session_id))
-
-                    if event.message_type == MessageType.ASSISTANT:
-                        if event.text:
-                            accumulated_text = event.text
-                        if event.tool_use:
-                            await status.set_tool(event.tool_use.category)
-                            embed = tool_use_embed(event.tool_use, in_progress=True)
-                            msg = await thread.send(embed=embed)
-                            tool_messages[event.tool_use.tool_id] = msg
-
-                    if event.message_type == MessageType.USER and event.tool_result_id:
-                        await status.set_thinking()
-
-                    if event.is_complete:
-                        if event.error:
-                            await thread.send(embed=error_embed(event.error))
-                            await status.set_error()
-                        else:
-                            response_text = event.text or accumulated_text
-                            if response_text:
-                                for chunk in chunk_message(response_text):
-                                    await thread.send(chunk)
-                            await thread.send(
-                                embed=session_complete_embed(event.cost_usd, event.duration_ms)
-                            )
-                            await status.set_done()
-
-                        if event.session_id:
-                            await self.repo.save(thread.id, event.session_id)
-
-            except Exception:
-                logger.exception("Error running Claude CLI for thread %d", thread.id)
-                await thread.send(embed=error_embed("An unexpected error occurred."))
-                await status.set_error()
+                # Use shared run helper — same rich experience for all paths
+                await run_claude_in_thread(
+                    thread=thread,
+                    runner=runner,
+                    repo=self.repo,
+                    prompt=prompt,
+                    session_id=session_id,
+                    status=status,
+                )
             finally:
                 self._active_runners.pop(thread.id, None)
