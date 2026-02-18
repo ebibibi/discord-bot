@@ -12,9 +12,13 @@ from __future__ import annotations
 
 from claude_discord.cogs.auto_upgrade import UpgradeConfig
 
+_UV = "/home/ebi/.local/bin/uv"
+
 EBIBOT_UPGRADE_CONFIG = UpgradeConfig(
     package_name="claude-code-discord-bridge",
     trigger_prefix="🔄 ebibot-upgrade",
     working_dir="/home/ebi/discord-bot",
-    restart_command=["sudo", "systemctl", "restart", "discord-bot.service"],
+    upgrade_command=[_UV, "lock", "--upgrade-package", "claude-code-discord-bridge"],
+    sync_command=[_UV, "sync"],
+    restart_command=["/usr/bin/sudo", "/usr/bin/systemctl", "restart", "discord-bot.service"],
 )
