@@ -45,24 +45,30 @@ If **source code** (.py files) changed:
 - Keep documentation accurate and in sync with the code
 - Do NOT update docs for trivial changes (formatting, comments, internal refactors that don't change behavior)
 
-## Step 4: Translate to Japanese
+## Step 4: Translate to all supported languages
 
-Check if docs/ja/ exists. If not, create it.
+Target languages (create docs/{lang}/ for each):
+- `ja` — Japanese (日本語)
+- `zh-CN` — Chinese Simplified (简体中文)
+- `ko` — Korean (한국어)
+- `es` — Spanish (Español)
+- `pt-BR` — Portuguese - Brazil (Português)
+- `fr` — French (Français)
 
-For each English doc (README.md, CONTRIBUTING.md), create or update its Japanese translation at docs/ja/:
+For each English doc (README.md, CONTRIBUTING.md), create or update its translation in every language directory.
 
 Translation rules:
 1. Keep all markdown formatting, code blocks, links, and badges intact
 2. Do NOT translate: code snippets, URLs, file paths, variable names, "claude-code-discord-bridge", common English tech terms (CLI, API, Cog, thread, session, subprocess, etc.)
 3. DO translate: headings, descriptions, explanatory text, table headers/descriptions, comments, notes
-4. Add this notice at the top of each translated file:
+4. Add a bilingual notice at the top of each translated file (in English + the target language):
    ```
    > **Note:** This is an auto-translated version of the original English documentation.
    > If there are any discrepancies, the [English version](../../README.md) takes precedence.
-   > この文書は英語版ドキュメントの自動翻訳です。内容に差異がある場合は英語版が優先されます。
+   > (同じ内容をその言語で)
    ```
-5. Use natural, fluent Japanese — not mechanical translation
-6. For README.md, update relative links to point to Japanese versions where they exist
+5. Use natural, fluent language — not mechanical translation. Write as a native speaker would
+6. For README.md, update relative links to point to same-language versions where they exist
 
 ## Step 5: Create a PR
 
@@ -80,7 +86,7 @@ gh pr create --title "[docs-sync] Update documentation and translations" --body 
 
 Changes:
 - Updated English docs to reflect code changes (if applicable)
-- Synchronized Japanese translations
+- Synchronized translations (ja, zh-CN, ko, es, pt-BR, fr)
 
 This PR was automatically created by the docs-sync system."
 ```
