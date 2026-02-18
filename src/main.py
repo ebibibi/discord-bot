@@ -1,4 +1,4 @@
-"""エントリーポイント — Bot + REST API同一asyncioループ"""
+"""エントリーポイント — Bot + REST API + Claude Chat 同一asyncioループ"""
 
 import asyncio
 import os
@@ -10,11 +10,34 @@ from .bot import EbiBot
 from .api.server import APIServer
 from .cogs.reminder import ReminderCog
 from .cogs.watchdog import WatchdogCog
+from .cogs.claude_chat import ClaudeChatCog
+from claude_discord.claude.runner import ClaudeRunner
 from .database.models import Database
 from .database.repository import NotificationRepository
 from .utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+async def _init_claude_session_db(db_path: str) -> None:
+    """Initialize the Claude session database (aiosqlite)."""
+    import aiosqlite
+    from pathlib import Path
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    async with aiosqlite.connect(db_path) as db:
+        await db.executescript("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                thread_id INTEGER PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                working_dir TEXT,
+                model TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                last_used_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_sessions_last_used ON sessions(last_used_at);
+        """)
+        await db.commit()
+    logger.info(f"Claude session DB初期化完了: {db_path}")
 
 
 def main() -> None:
@@ -28,10 +51,13 @@ def main() -> None:
     channel_id_str = os.getenv("DISCORD_CHANNEL_ID", "")
     channel_id = int(channel_id_str) if channel_id_str.isdigit() else None
 
+    claude_channel_id_str = os.getenv("CLAUDE_CHANNEL_ID", "")
+    claude_channel_id = int(claude_channel_id_str) if claude_channel_id_str.isdigit() else None
+
     api_host = os.getenv("API_HOST", "127.0.0.1")
     api_port = int(os.getenv("API_PORT", "8099"))
 
-    # DB初期化
+    # DB初期化（通知用）
     db = Database(db_path="data/bot.db")
     db.initialize()
     repo = NotificationRepository(db)
@@ -47,6 +73,32 @@ def main() -> None:
             # Cog追加
             await bot.add_cog(ReminderCog(bot, repo))
             await bot.add_cog(WatchdogCog(bot))
+
+            # Claude Chat Cog追加
+            if claude_channel_id:
+                session_db_path = "data/sessions.db"
+                await _init_claude_session_db(session_db_path)
+
+                from .database.claude_session_repository import ClaudeSessionRepository
+                session_repo = ClaudeSessionRepository(session_db_path)
+                runner = ClaudeRunner(
+                    command=os.getenv("CLAUDE_COMMAND", "claude"),
+                    model=os.getenv("CLAUDE_MODEL", "sonnet"),
+                    permission_mode=os.getenv("CLAUDE_PERMISSION_MODE", "acceptEdits"),
+                    working_dir=os.getenv("CLAUDE_WORKING_DIR", "") or None,
+                    timeout_seconds=int(os.getenv("SESSION_TIMEOUT_SECONDS", "300")),
+                )
+                claude_cog = ClaudeChatCog(
+                    bot=bot,
+                    repo=session_repo,
+                    runner=runner,
+                    claude_channel_id=claude_channel_id,
+                    max_concurrent=int(os.getenv("MAX_CONCURRENT_SESSIONS", "3")),
+                )
+                await bot.add_cog(claude_cog)
+                logger.info(f"Claude Chat Cog追加完了 (channel: {claude_channel_id})")
+            else:
+                logger.warning("CLAUDE_CHANNEL_ID 未設定 — Claude Chat Cog無効")
 
             # REST API起動
             await api_server.start()
