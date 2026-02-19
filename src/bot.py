@@ -21,6 +21,8 @@ class EbiBot(commands.Bot):
             intents=intents,
         )
         self.default_channel_id = default_channel_id
+        # Alias for bridge compatibility (ClaudeDiscordBot uses channel_id)
+        self.channel_id = default_channel_id
 
     async def setup_hook(self) -> None:
         """Cogのロードとスラッシュコマンドの同期。"""
