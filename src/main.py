@@ -185,6 +185,8 @@ def main() -> None:
     async def shutdown() -> None:
         logger.info("シャットダウン開始...")
         await api_server.stop()
+        if not bot.is_closed():
+            await bot.close()
         db.close()
         logger.info("シャットダウン完了")
 
