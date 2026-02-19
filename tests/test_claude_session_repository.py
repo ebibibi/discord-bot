@@ -4,9 +4,9 @@ import asyncio
 import os
 import tempfile
 
-import aiosqlite
 import pytest
 
+from claude_discord.database.models import init_db
 from src.database.claude_session_repository import ClaudeSessionRepository, SessionRecord
 
 
@@ -21,24 +21,9 @@ def db_path():
 
 @pytest.fixture
 def repo(db_path):
-    """Create repository with initialized schema."""
-    asyncio.get_event_loop().run_until_complete(_init_db(db_path))
+    """Create repository with initialized schema (using bridge's init_db)."""
+    asyncio.get_event_loop().run_until_complete(init_db(db_path))
     return ClaudeSessionRepository(db_path)
-
-
-async def _init_db(db_path: str) -> None:
-    async with aiosqlite.connect(db_path) as db:
-        await db.executescript("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                thread_id INTEGER PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                working_dir TEXT,
-                model TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-                last_used_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-            );
-        """)
-        await db.commit()
 
 
 @pytest.mark.asyncio

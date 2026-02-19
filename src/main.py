@@ -10,8 +10,10 @@ from dotenv import load_dotenv
 
 from claude_discord.claude.runner import ClaudeRunner
 from claude_discord.cogs.auto_upgrade import AutoUpgradeCog
+from claude_discord.cogs.session_manage import SessionManageCog
 from claude_discord.cogs.skill_command import SkillCommandCog
 from claude_discord.cogs.webhook_trigger import WebhookTriggerCog
+from claude_discord.database.models import init_db
 from claude_discord.database.notification_repo import NotificationRepository
 from claude_discord.ext.api_server import ApiServer
 
@@ -29,23 +31,11 @@ logger = get_logger(__name__)
 
 
 async def _init_claude_session_db(db_path: str) -> None:
-    """Initialize the Claude session database (aiosqlite)."""
-    import aiosqlite
+    """Initialize the Claude session database using bridge's init_db (with migrations)."""
     from pathlib import Path
+
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    async with aiosqlite.connect(db_path) as db:
-        await db.executescript("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                thread_id INTEGER PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                working_dir TEXT,
-                model TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-                last_used_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-            );
-            CREATE INDEX IF NOT EXISTS idx_sessions_last_used ON sessions(last_used_at);
-        """)
-        await db.commit()
+    await init_db(db_path)
     logger.info(f"Claude session DB初期化完了: {db_path}")
 
 
@@ -142,6 +132,17 @@ def main() -> None:
                         "Claude Chat Cog追加完了 (channel: %d)",
                         claude_channel_id,
                     )
+
+                    # Session Management Cog
+                    session_manage_cog = SessionManageCog(
+                        bot=bot,
+                        repo=session_repo,
+                        cli_sessions_path=os.path.expanduser(
+                            "~/.claude/projects",
+                        ),
+                    )
+                    await bot.add_cog(session_manage_cog)
+                    logger.info("Session Manage Cog追加完了")
 
                     # Skill Command Cog
                     skill_cog = SkillCommandCog(

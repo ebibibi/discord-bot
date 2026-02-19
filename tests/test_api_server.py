@@ -8,17 +8,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from src.api.server import APIServer
-from src.database.models import Database
-from src.database.repository import NotificationRepository
+from claude_discord.database.notification_repo import NotificationRepository
+from src.api.server import ApiServer
 
 
-def _make_fixtures():
-    """同期でDB・repo・mock_bot・api_serverを作る。"""
+async def _make_fixtures():
+    """DB・repo・mock_bot・api_serverを作る。"""
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    db = Database(db_path=tmp.name)
-    db.initialize()
-    repo = NotificationRepository(db)
+    repo = NotificationRepository(tmp.name)
+    await repo.init_db()
 
     bot = MagicMock()
     bot.default_channel_id = 123456789
@@ -26,13 +24,17 @@ def _make_fixtures():
     mock_channel.send = AsyncMock()
     bot.get_channel = MagicMock(return_value=mock_channel)
 
-    api_server = APIServer(repo=repo, bot=bot)
-    return db, tmp.name, api_server
+    api_server = ApiServer(
+        repo=repo,
+        bot=bot,
+        default_channel_id=123456789,
+    )
+    return tmp.name, api_server
 
 
 @pytest.mark.asyncio
 async def test_health():
-    db, db_path, api_server = _make_fixtures()
+    db_path, api_server = await _make_fixtures()
     try:
         server = TestServer(api_server.app)
         async with TestClient(server) as client:
@@ -41,13 +43,12 @@ async def test_health():
             data = await resp.json()
             assert data["status"] == "ok"
     finally:
-        db.close()
         os.unlink(db_path)
 
 
 @pytest.mark.asyncio
 async def test_notify():
-    db, db_path, api_server = _make_fixtures()
+    db_path, api_server = await _make_fixtures()
     try:
         server = TestServer(api_server.app)
         async with TestClient(server) as client:
@@ -56,26 +57,24 @@ async def test_notify():
             data = await resp.json()
             assert data["status"] == "sent"
     finally:
-        db.close()
         os.unlink(db_path)
 
 
 @pytest.mark.asyncio
 async def test_notify_missing_message():
-    db, db_path, api_server = _make_fixtures()
+    db_path, api_server = await _make_fixtures()
     try:
         server = TestServer(api_server.app)
         async with TestClient(server) as client:
             resp = await client.post("/api/notify", json={})
             assert resp.status == 400
     finally:
-        db.close()
         os.unlink(db_path)
 
 
 @pytest.mark.asyncio
 async def test_schedule():
-    db, db_path, api_server = _make_fixtures()
+    db_path, api_server = await _make_fixtures()
     try:
         server = TestServer(api_server.app)
         async with TestClient(server) as client:
@@ -89,26 +88,24 @@ async def test_schedule():
             assert data["status"] == "scheduled"
             assert "id" in data
     finally:
-        db.close()
         os.unlink(db_path)
 
 
 @pytest.mark.asyncio
 async def test_schedule_missing_fields():
-    db, db_path, api_server = _make_fixtures()
+    db_path, api_server = await _make_fixtures()
     try:
         server = TestServer(api_server.app)
         async with TestClient(server) as client:
             resp = await client.post("/api/schedule", json={"message": "テスト"})
             assert resp.status == 400
     finally:
-        db.close()
         os.unlink(db_path)
 
 
 @pytest.mark.asyncio
 async def test_list_scheduled():
-    db, db_path, api_server = _make_fixtures()
+    db_path, api_server = await _make_fixtures()
     try:
         server = TestServer(api_server.app)
         async with TestClient(server) as client:
@@ -122,13 +119,12 @@ async def test_list_scheduled():
             data = await resp.json()
             assert len(data["notifications"]) >= 1
     finally:
-        db.close()
         os.unlink(db_path)
 
 
 @pytest.mark.asyncio
 async def test_cancel_scheduled():
-    db, db_path, api_server = _make_fixtures()
+    db_path, api_server = await _make_fixtures()
     try:
         server = TestServer(api_server.app)
         async with TestClient(server) as client:
@@ -145,26 +141,24 @@ async def test_cancel_scheduled():
             data = await resp.json()
             assert data["status"] == "cancelled"
     finally:
-        db.close()
         os.unlink(db_path)
 
 
 @pytest.mark.asyncio
 async def test_cancel_nonexistent():
-    db, db_path, api_server = _make_fixtures()
+    db_path, api_server = await _make_fixtures()
     try:
         server = TestServer(api_server.app)
         async with TestClient(server) as client:
             resp = await client.delete("/api/scheduled/99999")
             assert resp.status == 404
     finally:
-        db.close()
         os.unlink(db_path)
 
 
 @pytest.mark.asyncio
 async def test_notify_invalid_json():
-    db, db_path, api_server = _make_fixtures()
+    db_path, api_server = await _make_fixtures()
     try:
         server = TestServer(api_server.app)
         async with TestClient(server) as client:
@@ -175,5 +169,4 @@ async def test_notify_invalid_json():
             )
             assert resp.status == 400
     finally:
-        db.close()
         os.unlink(db_path)

@@ -1,80 +1,15 @@
-"""Claude Code session repository (aiosqlite).
+"""Claude Code session repository — re-export from bridge framework.
 
-Wraps the session repository from claude-code-discord-bridge framework.
-This module uses the same schema initialized in main.py.
+Previously this was a local copy of the session repository logic.
+Now it delegates entirely to the bridge's SessionRepository which has
+additional features (origin tracking, summary, list_all, get_by_session_id).
 """
 
 from __future__ import annotations
 
-import aiosqlite
-import logging
-from dataclasses import dataclass
+from claude_discord.database.repository import SessionRecord, SessionRepository
 
-logger = logging.getLogger(__name__)
+# Re-export for backwards compatibility
+ClaudeSessionRepository = SessionRepository
 
-
-@dataclass
-class SessionRecord:
-    """A stored session mapping."""
-
-    thread_id: int
-    session_id: str
-    working_dir: str | None
-    model: str | None
-    created_at: str
-    last_used_at: str
-
-
-class ClaudeSessionRepository:
-    """CRUD operations for Claude Code session records."""
-
-    def __init__(self, db_path: str) -> None:
-        self.db_path = db_path
-
-    async def get(self, thread_id: int) -> SessionRecord | None:
-        """Get session by Discord thread ID."""
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute(
-                "SELECT * FROM sessions WHERE thread_id = ?",
-                (thread_id,),
-            )
-            row = await cursor.fetchone()
-            if row is None:
-                return None
-            return SessionRecord(**dict(row))
-
-    async def save(
-        self,
-        thread_id: int,
-        session_id: str,
-        working_dir: str | None = None,
-        model: str | None = None,
-    ) -> SessionRecord:
-        """Create or update a session mapping."""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                """INSERT INTO sessions (thread_id, session_id, working_dir, model)
-                   VALUES (?, ?, ?, ?)
-                   ON CONFLICT(thread_id) DO UPDATE SET
-                     session_id = excluded.session_id,
-                     working_dir = excluded.working_dir,
-                     model = excluded.model,
-                     last_used_at = datetime('now', 'localtime')""",
-                (thread_id, session_id, working_dir, model),
-            )
-            await db.commit()
-
-        record = await self.get(thread_id)
-        assert record is not None
-        return record
-
-    async def delete(self, thread_id: int) -> bool:
-        """Delete a session mapping. Returns True if a row was deleted."""
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
-                "DELETE FROM sessions WHERE thread_id = ?",
-                (thread_id,),
-            )
-            await db.commit()
-            return cursor.rowcount > 0
+__all__ = ["ClaudeSessionRepository", "SessionRecord", "SessionRepository"]
