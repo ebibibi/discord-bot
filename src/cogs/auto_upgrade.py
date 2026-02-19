@@ -21,5 +21,6 @@ EBIBOT_UPGRADE_CONFIG = UpgradeConfig(
     upgrade_command=[_UV, "lock", "--upgrade-package", "claude-code-discord-bridge"],
     sync_command=[_UV, "sync"],
     restart_command=["/usr/bin/sudo", "/usr/bin/systemctl", "restart", "discord-bot.service"],
+    upgrade_approval=True,
     restart_approval=True,
 )
