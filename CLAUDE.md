@@ -18,9 +18,24 @@ github.com/ebibibi/claude-code-discord-bridge  /home/ebi/discord-bot/
 - **EbiBot** = 個人インスタンス（プライベートリポ）。claude-code-discord-bridgeをパッケージ依存 + 独自Cog（reminder, watchdog）
 - **アップデート**: `uv lock --upgrade-package claude-code-discord-bridge && uv sync`
 - **機能追加の判断基準**: 汎用的 → claude-code-discord-bridgeに。個人ワークフロー固有 → EbiBotに
-- **新機能を追加するとき、bridge側に汎化できないか常に考えること**。bridge側に同等機能があるならそちらを使う
-- **bridge由来の汎用Cog**: `WebhookTriggerCog`（Webhook→Claude実行）、`AutoUpgradeCog`（自動更新）、`ApiServer`（REST API）
 - **1つのBotトークン、1つのプロセス**で全Cogが動く。別プロセスで同じトークンを使わない
+
+### 絶対ルール: ccdb のコンポーネントを複製するな
+
+**ccdb に存在する Cog・クラス・関数を EbiBot 側にコピーして独自版を作ることは禁止。**
+
+- ccdb の Cog はそのまま `from claude_discord.xxx import XxxCog` して使う
+- EbiBot 独自の Cog が許されるのは **ccdb に存在しない機能** のみ（reminder, watchdog）
+- ccdb の Cog をカスタマイズしたい場合は **ccdb 側にパラメータ/フックを追加** する。EbiBot 側でラップやコピーをしない
+- EbiBot の `src/cogs/` に置いてよいのは: (1) EbiBot固有の Cog、(2) ccdb の Cog に渡す **設定定義のみ** のファイル（`auto_upgrade.py`, `docs_sync.py` のように）
+- **なぜ**: ccdb に機能追加したとき、EbiBot 側に独自コピーがあるとそこだけ古いまま残る。2026-02-19 に concurrency awareness が動かなかった原因がこれ
+
+### ccdb 側の設計責務
+
+EbiBot のような消費者が **パッケージ更新だけで新機能を受け取れる** ように設計する:
+- デフォルトで有効になるべき機能は、消費者側の配線なしで動くようにする（auto-discovery パターン等）
+- Cog のコンストラクタに新パラメータを足すときは `= None` デフォルトで後方互換を保つ
+- 消費者にコード変更を要求する設計は失敗。設計を見直す
 
 ## アーキテクチャ
 
@@ -31,14 +46,18 @@ github.com/ebibibi/claude-code-discord-bridge  /home/ebi/discord-bot/
 
 ## Cog一覧
 
-| Cog | 元リポ | 役割 |
-|-----|--------|------|
+| Cog | 種別 | 役割 |
+|-----|------|------|
 | `reminder.py` | EbiBot独自 | /remind スラッシュコマンド + 時刻指定送信 |
 | `watchdog.py` | EbiBot独自 | Todoist期限切れ30分監視 |
-| `claude_chat.py` | EbiBot独自（bridgeのクラスをimport） | Discord → Claude Code CLI チャット |
-| `docs_sync.py` | **プロンプト定義のみ**（bridge WebhookTriggerCog使用） | GitHub → ドキュメント同期 |
-| `auto_upgrade.py` | **設定定義のみ**（bridge AutoUpgradeCog使用） | パッケージ自動更新 + 再起動 |
-| `api/server.py` | **bridge ApiServer を re-export** | REST API（通知・スケジュール） |
+| `docs_sync.py` | **設定定義のみ** → ccdb `WebhookTriggerCog` | GitHub → ドキュメント同期 |
+| `auto_upgrade.py` | **設定定義のみ** → ccdb `AutoUpgradeCog` | パッケージ自動更新 + 再起動 |
+| `api/server.py` | **ccdb `ApiServer` を re-export** | REST API（通知・スケジュール） |
+
+ccdb から直接使用（main.py で import）:
+- `ClaudeChatCog` — Discord → Claude Code CLI チャット
+- `SkillCommandCog` — /skill スラッシュコマンド
+- `SessionManageCog` — セッション管理
 
 ## ディレクトリ構成
 
@@ -46,7 +65,7 @@ github.com/ebibibi/claude-code-discord-bridge  /home/ebi/discord-bot/
 src/
   main.py          # エントリーポイント
   bot.py           # EbiBot クラス
-  cogs/            # 機能モジュール（reminder, watchdog, claude_chat）
+  cogs/            # EbiBot独自Cog + ccdbへの設定定義のみ
   api/             # REST API（aiohttp, localhost:8099）
   database/        # SQLite DB & Repository（通知 + Claude session）
   utils/           # Embed, Logger
