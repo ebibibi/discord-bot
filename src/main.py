@@ -15,6 +15,7 @@ from claude_discord.cogs.skill_command import SkillCommandCog
 from claude_discord.cogs.webhook_trigger import WebhookTriggerCog
 from claude_discord.database.models import init_db
 from claude_discord.database.notification_repo import NotificationRepository
+from claude_discord.database.settings_repo import SettingsRepository
 from claude_discord.ext.api_server import ApiServer
 
 from .bot import EbiBot
@@ -134,12 +135,14 @@ def main() -> None:
                     )
 
                     # Session Management Cog
+                    settings_repo = SettingsRepository(session_db_path)
                     session_manage_cog = SessionManageCog(
                         bot=bot,
                         repo=session_repo,
                         cli_sessions_path=os.path.expanduser(
                             "~/.claude/projects",
                         ),
+                        settings_repo=settings_repo,
                     )
                     await bot.add_cog(session_manage_cog)
                     logger.info("Session Manage Cog追加完了")
