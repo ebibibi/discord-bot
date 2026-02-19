@@ -165,14 +165,10 @@ def main() -> None:
                     logger.info("Docs Sync Cog追加完了 (WebhookTriggerCog)")
 
                     # Auto Upgrade — bridge の AutoUpgradeCog
-                    # drain_check: Claude Chat + Webhook Trigger の両方が終わったら再起動OK
+                    # DrainAware protocol で Claude Chat + Webhook Trigger を自動検出
                     auto_upgrade_cog = AutoUpgradeCog(
                         bot=bot,
                         config=EBIBOT_UPGRADE_CONFIG,
-                        drain_check=lambda: (
-                            claude_cog.active_session_count == 0
-                            and docs_sync_cog.active_count == 0
-                        ),
                     )
                     await bot.add_cog(auto_upgrade_cog)
                     logger.info("Auto Upgrade Cog追加完了 (AutoUpgradeCog)")
