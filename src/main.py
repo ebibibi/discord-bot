@@ -20,7 +20,7 @@ from claude_discord.ext.api_server import ApiServer
 
 from .bot import EbiBot
 from .cogs.auto_upgrade import EBIBOT_UPGRADE_CONFIG
-from .cogs.claude_chat import ClaudeChatCog
+from claude_discord.cogs.claude_chat import ClaudeChatCog
 from .cogs.docs_sync import DOCS_SYNC_TRIGGERS
 from .cogs.reminder import ReminderCog
 from .cogs.watchdog import WatchdogCog
@@ -122,7 +122,6 @@ def main() -> None:
                         bot=bot,
                         repo=session_repo,
                         runner=claude_runner,
-                        claude_channel_id=claude_channel_id,
                         max_concurrent=int(
                             os.getenv("MAX_CONCURRENT_SESSIONS", "3"),
                         ),
