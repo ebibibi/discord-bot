@@ -3,6 +3,8 @@
 import discord
 from discord.ext import commands
 
+from claude_discord.concurrency import SessionRegistry
+
 from .utils.embeds import build_startup_embed
 from .utils.logger import get_logger
 
@@ -23,6 +25,7 @@ class EbiBot(commands.Bot):
         self.default_channel_id = default_channel_id
         # Alias for bridge compatibility (ClaudeDiscordBot uses channel_id)
         self.channel_id = default_channel_id
+        self.session_registry = SessionRegistry()
 
     async def setup_hook(self) -> None:
         """Cogのロードとスラッシュコマンドの同期。"""

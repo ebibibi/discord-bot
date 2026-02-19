@@ -20,6 +20,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from claude_discord.claude.runner import ClaudeRunner
+from claude_discord.concurrency import SessionRegistry
 from claude_discord.cogs._run_helper import run_claude_in_thread
 from claude_discord.discord_ui.status import StatusManager
 
@@ -37,12 +38,14 @@ class ClaudeChatCog(commands.Cog):
         claude_channel_id: int,
         max_concurrent: int = 3,
         allowed_user_ids: set[int] | None = None,
+        registry: SessionRegistry | None = None,
     ) -> None:
         self.bot = bot
         self.repo = repo
         self.runner = runner
         self.claude_channel_id = claude_channel_id
         self._allowed_user_ids = allowed_user_ids
+        self._registry = registry or getattr(bot, "session_registry", None)
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._active_runners: dict[int, ClaudeRunner] = {}
 
@@ -141,6 +144,7 @@ class ClaudeChatCog(commands.Cog):
                     prompt=prompt,
                     session_id=session_id,
                     status=status,
+                    registry=self._registry,
                 )
             finally:
                 self._active_runners.pop(thread.id, None)
