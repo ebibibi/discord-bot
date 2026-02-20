@@ -92,6 +92,44 @@ uv.lock            # ロックファイル
 | DELETE | `/api/scheduled/{id}` | キャンセル |
 | GET | `/api/health` | ヘルスチェック |
 
+## 定期タスク一覧（重要）
+
+EbiBotには**2種類の定期タスク**がある。混同しないこと。
+
+### 種別1: コード埋め込みループ（変更はデプロイ必要）
+
+| Cog | ファイル | 間隔 | 動作条件 |
+|-----|---------|------|---------|
+| `ReminderCog.check_scheduled` | `src/cogs/reminder.py` | 30秒 | 常時 |
+| `WatchdogCog.check_overdue` | `src/cogs/watchdog.py` | 30分 | 8:00〜23:00のみ |
+
+- **ReminderCog**: `/remind` コマンドで登録した通知をDB (`data/bot.db`) からチェックして送信
+- **WatchdogCog**: Todoistの期限切れタスクを `todoist.sh (overdue)` で取得してDiscord通知。1タスク/日の上限あり
+
+### 種別2: SchedulerCog（SQLite管理・動的追加可能）
+
+ccdb の `SchedulerCog` が 30秒マスターループで `data/tasks.db` を監視し、期限のきたタスクを自動実行。
+
+**現在登録中のタスク:**
+
+| ID | 名前 | 間隔 | 内容 |
+|----|------|------|------|
+| 1 | `genai-assessment-workitem-triage` | 15分 | Azure DevOps GenAI-Assessment のWorkItemをトリアージ/自動実装 |
+
+**タスクの確認・操作:**
+```bash
+# 一覧確認
+sqlite3 /home/ebi/discord-bot/data/tasks.db "SELECT id, name, interval_seconds, datetime(next_run_at, 'unixepoch', 'localtime') as next_run FROM scheduled_tasks;"
+
+# REST API経由で追加（Bot起動中のみ）
+curl -s http://127.0.0.1:8099/api/tasks
+
+# 直接DB操作（Bot停止中でも可）
+sqlite3 /home/ebi/discord-bot/data/tasks.db "UPDATE scheduled_tasks SET interval_seconds=1800 WHERE id=1;"
+```
+
+> **注意**: タスクのプロンプトは `src/cogs/` 内に定義があるものもある。`genai-assessment-workitem-triage` のプロンプトはDB直書き（`data/tasks.db` の `prompt` カラムが唯一の真実の源）。
+
 ## Watchdog
 
 Todoist期限切れを30分おきに監視。`~/.claude/skills/todoist/scripts/todoist.sh` 経由。
