@@ -111,10 +111,6 @@ def main() -> None:
             await bot.add_cog(ReminderCog(bot, ebibot_repo))
             await bot.add_cog(WatchdogCog(bot))
 
-            # SchedulerCog — 動的定期実行タスク管理
-            await bot.add_cog(SchedulerCog(bot=bot, task_repo=task_repo))
-            logger.info("Scheduler Cog 追加完了")
-
             # Claude Chat Cog + 関連
             if claude_channel_id and claude_runner:
                 session_db_path = "data/sessions.db"
@@ -187,6 +183,15 @@ def main() -> None:
                     )
                     await bot.add_cog(auto_upgrade_cog)
                     logger.info("Auto Upgrade Cog追加完了 (AutoUpgradeCog)")
+
+                    # SchedulerCog — 動的定期実行タスク管理
+                    scheduler_cog = SchedulerCog(
+                        bot=bot,
+                        runner=claude_runner,
+                        repo=task_repo,
+                    )
+                    await bot.add_cog(scheduler_cog)
+                    logger.info("Scheduler Cog追加完了")
             else:
                 logger.warning("CLAUDE_CHANNEL_ID 未設定 — Claude Chat Cog無効")
 
