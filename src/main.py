@@ -10,14 +10,12 @@ from dotenv import load_dotenv
 
 from claude_discord.claude.runner import ClaudeRunner
 from claude_discord.cogs.auto_upgrade import AutoUpgradeCog
-from claude_discord.cogs.scheduler import SchedulerCog
 from claude_discord.cogs.session_manage import SessionManageCog
 from claude_discord.cogs.skill_command import SkillCommandCog
 from claude_discord.cogs.webhook_trigger import WebhookTriggerCog
 from claude_discord.database.models import init_db
 from claude_discord.database.notification_repo import NotificationRepository
 from claude_discord.database.settings_repo import SettingsRepository
-from claude_discord.database.task_repo import TaskRepository
 from claude_discord.ext.api_server import ApiServer
 
 from .bot import EbiBot
@@ -87,9 +85,6 @@ def main() -> None:
     # bridge の NotificationRepository（REST API用）
     notification_repo = NotificationRepository("data/notifications.db")
 
-    # SchedulerCog 用 TaskRepository
-    task_repo = TaskRepository("data/tasks.db")
-
     # bridge の ApiServer（REST API）
     api_server = ApiServer(
         repo=notification_repo,
@@ -97,23 +92,15 @@ def main() -> None:
         default_channel_id=channel_id,
         host=api_host,
         port=api_port,
-        task_repo=task_repo,
     )
 
     async def start_all() -> None:
         # 通知DBスキーマ初期化
         await notification_repo.init_db()
-        # SchedulerCog 用 DB スキーマ初期化
-        await task_repo.init_db()
-
         async with bot:
             # EbiBot独自 Cog
             await bot.add_cog(ReminderCog(bot, ebibot_repo))
             await bot.add_cog(WatchdogCog(bot))
-
-            # SchedulerCog — 動的定期実行タスク管理
-            await bot.add_cog(SchedulerCog(bot=bot, task_repo=task_repo))
-            logger.info("Scheduler Cog 追加完了")
 
             # Claude Chat Cog + 関連
             if claude_channel_id and claude_runner:
