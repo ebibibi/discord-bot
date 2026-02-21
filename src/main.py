@@ -67,6 +67,7 @@ def main() -> None:
             dangerously_skip_permissions=os.getenv(
                 "CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS", "",
             ).lower() in ("1", "true", "yes"),
+            api_port=api_port,
         )
 
     # bridge の NotificationRepository（REST API用）
@@ -114,6 +115,10 @@ def main() -> None:
                     # ApiServer に task_repo を設定（REST API経由でタスク操作可能に）
                     if components.task_repo is not None:
                         api_server.task_repo = components.task_repo
+
+                    # ApiServer に lounge_repo を設定（REST API経由でラウンジ投稿可能に）
+                    if components.lounge_repo is not None:
+                        api_server.lounge_repo = components.lounge_repo
 
                     # --- EbiBot固有のCog（ccdbには含まれない） ---
 
