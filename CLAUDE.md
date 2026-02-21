@@ -82,6 +82,27 @@ uv.lock            # ロックファイル
 - REST APIは `127.0.0.1:8099` のみバインド（外部非公開）
 - **claude-code-discord-bridge由来のコードを変更したい場合**: まずclaude-code-discord-bridgeリポで変更・push → EbiBotで `uv lock --upgrade-package claude-code-discord-bridge && uv sync`
 
+## 🚨 Botの再起動・デプロイ手順（必ず守れ）
+
+`sudo systemctl restart discord-bot` は **全Claude Cog・全セッション**に影響する破壊的操作。
+
+**再起動前の必須チェック:**
+1. **AI ラウンジを読む** → `curl -s "$CCDB_API_URL/api/lounge" | python3 -c "import json,sys; msgs=json.load(sys.stdin); [print(f'[{m[\"posted_at\"][11:16]}] {m[\"label\"]}: {m[\"message\"]}') for m in msgs.get('messages',[])]"`
+2. 直近10分以内のメッセージに「作業中」「進行中」のセッションがないか確認
+3. 作業中セッションがあれば待つ。なければラウンジに「これからBot再起動します」と予告
+4. 再起動実行 → 完了後にラウンジへ報告
+
+**再起動コマンド:**
+```bash
+sudo systemctl restart discord-bot
+sudo systemctl status discord-bot  # 起動確認
+```
+
+**AI Loungeを読むコマンド（ショートカット）:**
+```bash
+curl -s "$CCDB_API_URL/api/lounge" | python3 -m json.tool
+```
+
 ## REST API
 
 | メソッド | パス | 用途 |
