@@ -53,6 +53,7 @@ def main() -> None:
     bot = EbiBot(default_channel_id=channel_id)
 
     # Claude Runner
+    # api_port は setup_bridge(api_server=...) が自動設定する（CCDB_API_URL をClaudeに渡すため）
     claude_runner = None
     if claude_channel_id:
         allowed_tools_str = os.getenv("CLAUDE_ALLOWED_TOOLS", "")
@@ -67,7 +68,6 @@ def main() -> None:
             dangerously_skip_permissions=os.getenv(
                 "CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS", "",
             ).lower() in ("1", "true", "yes"),
-            api_port=api_port,
         )
 
     # bridge の NotificationRepository（REST API用）
@@ -92,6 +92,8 @@ def main() -> None:
             await bot.add_cog(WatchdogCog(bot))
 
             # ccdb コア Cog 一括セットアップ（auto-discovery）
+            # api_server を渡すと ccdb が自動でリポを紐付け、runner.api_port も設定してくれる
+            # ccdb に新しい機能（Cog・リポ）が追加されても、ここは変更不要
             if claude_channel_id and claude_runner:
                 owner_id_str = os.getenv("DISCORD_OWNER_ID", "")
                 if not owner_id_str.isdigit():
@@ -99,11 +101,10 @@ def main() -> None:
                 else:
                     allowed_user_ids = {int(owner_id_str)}
 
-                    # setup_bridge がコアCogを全部登録してくれる
-                    # ccdbに新しいCogが追加されても、ここの変更は不要
-                    components = await setup_bridge(
+                    await setup_bridge(
                         bot,
                         claude_runner,
+                        api_server=api_server,
                         session_db_path="data/sessions.db",
                         allowed_user_ids=allowed_user_ids,
                         claude_channel_id=claude_channel_id,
@@ -111,14 +112,6 @@ def main() -> None:
                         enable_scheduler=True,
                         task_db_path="data/tasks.db",
                     )
-
-                    # ApiServer に task_repo を設定（REST API経由でタスク操作可能に）
-                    if components.task_repo is not None:
-                        api_server.task_repo = components.task_repo
-
-                    # ApiServer に lounge_repo を設定（REST API経由でラウンジ投稿可能に）
-                    if components.lounge_repo is not None:
-                        api_server.lounge_repo = components.lounge_repo
 
                     # --- EbiBot固有のCog（ccdbには含まれない） ---
 
