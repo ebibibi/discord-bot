@@ -23,4 +23,5 @@ EBIBOT_UPGRADE_CONFIG = UpgradeConfig(
     restart_command=["/usr/bin/sudo", "/usr/bin/systemctl", "restart", "discord-bot.service"],
     upgrade_approval=True,
     restart_approval=True,
+    slash_command_enabled=True,
 )
