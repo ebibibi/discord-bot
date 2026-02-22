@@ -243,7 +243,7 @@ wheels = [
 [[package]]
 name = "claude-code-discord-bridge"
 version = "1.3.0"
-source = { git = "https://github.com/ebibibi/claude-code-discord-bridge.git#6670dd199b3a5b9e8cb75feef6ca9d597bd8e4bf" }
+source = { git = "https://github.com/ebibibi/claude-code-discord-bridge.git#3c2ddef1d646fba1cf433e6f92a4989f7d5ffd7c" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "discord-py" },
