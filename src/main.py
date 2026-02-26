@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import signal
 
@@ -27,8 +28,29 @@ from .utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _configure_ccdb_logging() -> None:
+    """claude_discord.* ロガーを src.* と同じハンドラ・レベルで設定する。
+
+    ccdb パッケージは独自のハンドラを持たず root ロガーに伝播するため、
+    デフォルトの WARNING レベルでフィルタされて INFO/DEBUG が消える。
+    discord-bot 側で明示的に有効化する。
+    """
+    handler = logging.StreamHandler(__import__("sys").stdout)
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    ccdb_logger = logging.getLogger("claude_discord")
+    ccdb_logger.setLevel(logging.DEBUG)
+    ccdb_logger.addHandler(handler)
+    ccdb_logger.propagate = False
+
+
 def main() -> None:
     load_dotenv()
+    _configure_ccdb_logging()
 
     token = os.getenv("DISCORD_BOT_TOKEN")
     if not token or token == "YOUR_BOT_TOKEN_HERE":
