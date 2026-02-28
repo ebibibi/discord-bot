@@ -63,6 +63,12 @@ def main() -> None:
     claude_channel_id_str = os.getenv("CLAUDE_CHANNEL_ID", "")
     claude_channel_id = int(claude_channel_id_str) if claude_channel_id_str.isdigit() else None
 
+    # Additional channel IDs (comma-separated) — merged with claude_channel_id in setup_bridge
+    claude_channel_ids_str = os.getenv("CLAUDE_CHANNEL_IDS", "")
+    claude_channel_ids: set[int] | None = (
+        {int(x.strip()) for x in claude_channel_ids_str.split(",") if x.strip().isdigit()} or None
+    )
+
     api_host = os.getenv("API_HOST", "127.0.0.1")
     api_port = int(os.getenv("API_PORT", "8099"))
 
@@ -130,6 +136,7 @@ def main() -> None:
                         session_db_path="data/sessions.db",
                         allowed_user_ids=allowed_user_ids,
                         claude_channel_id=claude_channel_id,
+                        claude_channel_ids=claude_channel_ids,
                         cli_sessions_path=os.path.expanduser("~/.claude/projects"),
                         enable_scheduler=True,
                         task_db_path="data/tasks.db",
