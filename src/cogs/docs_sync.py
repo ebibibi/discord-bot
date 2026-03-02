@@ -15,17 +15,30 @@ _COMMON_HEADER = """\
 You are a documentation maintainer for the claude-code-discord-bridge project.
 The repository is at /home/ebi/claude-code-discord-bridge.
 
-## Step 1: Pull latest changes
+CRITICAL: NEVER use `git checkout` or `git switch` in the main working directory.
+All doc changes MUST be made in a git worktree to avoid disrupting other sessions.
+
+## Step 1: Pull latest and create a worktree
 
 ```bash
 cd /home/ebi/claude-code-discord-bridge && git pull origin main
+BRANCH_NAME="docs-sync/$(date +%Y%m%d-%H%M%S)"
+WORKTREE_DIR="/tmp/ccdb-docs-sync-$$"
+git worktree add -b "$BRANCH_NAME" "$WORKTREE_DIR" HEAD
 ```
+
+From this point on, all file reads and edits happen in `$WORKTREE_DIR`, NOT in the main repo directory.
+You may read files from the main repo for reference, but NEVER write to it.
 
 ## Step 2: Analyze what changed
 
-Run `git diff HEAD~1 HEAD --stat` and `git diff HEAD~1 HEAD` to understand what changed.
+```bash
+cd /home/ebi/claude-code-discord-bridge && git diff HEAD~1 HEAD --stat && git diff HEAD~1 HEAD
+```
 
 ## Step 3: Update English documentation if needed
+
+Work in the worktree directory (`$WORKTREE_DIR`).
 
 If **source code** (.py files) changed:
 - Read the changed code and check if README.md or CONTRIBUTING.md need updates
@@ -87,12 +100,11 @@ _PR_STEP_SYNC = """\
 
 ## Step 5: Create a PR with auto-merge
 
-If any documentation files were changed:
+If any documentation files were changed in the worktree:
 
-1. Create a branch and commit:
+1. Commit and push from the worktree (created in Step 1):
 ```bash
-cd /home/ebi/claude-code-discord-bridge
-git checkout -b docs-sync/$(date +%Y%m%d-%H%M%S)
+cd "$WORKTREE_DIR"
 git add -A
 git commit -m "[docs-sync] Update documentation (English + Japanese)
 
@@ -135,18 +147,23 @@ If nothing changed, just report that docs are already up to date.
 - Commit messages MUST start with "[docs-sync]" to prevent infinite loops
 - If unsure whether a code change needs doc updates, err on the side of NOT updating
 - The PR summary must be specific (e.g. "Added WebhookTrigger docs"), NOT generic (e.g. "Updated docs")
+
+## Step 6: Clean up worktree
+
+```bash
+cd /home/ebi/claude-code-discord-bridge && git worktree remove "$WORKTREE_DIR"
+```
 """
 
 _PR_STEP_TRANSLATE = """\
 
 ## Step 5: Create a PR with auto-merge
 
-If any files were changed:
+If any files were changed in the worktree:
 
-1. Create a branch and commit:
+1. Commit and push from the worktree (created in Step 1):
 ```bash
-cd /home/ebi/claude-code-discord-bridge
-git checkout -b docs-sync/$(date +%Y%m%d-%H%M%S)
+cd "$WORKTREE_DIR"
 git add -A
 git commit -m "[docs-sync] Update documentation and translations
 
@@ -193,6 +210,12 @@ If nothing changed, just report that docs are already up to date.
 - Commit messages MUST start with "[docs-sync]" to prevent infinite loops
 - If unsure whether a code change needs doc updates, err on the side of NOT updating
 - The PR summary must be specific (e.g. "Added WebhookTrigger docs"), NOT generic (e.g. "Updated docs")
+
+## Step 6: Clean up worktree
+
+```bash
+cd /home/ebi/claude-code-discord-bridge && git worktree remove "$WORKTREE_DIR"
+```
 """
 
 # Assembled prompts
